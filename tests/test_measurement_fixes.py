@@ -28,7 +28,7 @@ from assert_ai.core.judge import (
     infer_judge_status,
     normalize_transcript_judge_verdict,
 )
-from assert_ai.core.model_client import LLMAuthError, LLMContentFilterError, LLMProviderError
+from assert_ai.core.model_client import LLMAuthError, LLMContentFilterError, LLMInputError, LLMProviderError
 from assert_ai.stages.judge import run_judge
 from assert_ai.viewer_read_model import (
     VIEWER_CACHE_DIR,
@@ -1466,6 +1466,53 @@ class MeasurementFixesTest(unittest.TestCase):
                 build_viewer.assert_not_called()
                 self.assertEqual(scores_path.read_text(encoding="utf-8"), "synthetic cached scores\n")
                 self.assertEqual(hash_path.read_text(encoding="utf-8"), "synthetic cached fingerprint\n")
+
+    def test_run_judge_zero_error_ratio_preserves_score_row_statuses(self) -> None:
+        for status in ("filter_skipped", "scoring_skipped", "judge_failed"):
+            with self.subTest(status=status), TemporaryDirectory() as tmp_dir:
+                root = Path(tmp_dir)
+                inputs = self._judge_error_inputs(root, 2)
+                if status == "scoring_skipped":
+                    inference_path = Path(inputs["inference_set_path"])
+                    rows = [
+                        json.loads(line)
+                        for line in inference_path.read_text(encoding="utf-8").splitlines()
+                    ]
+                    rows[0]["stop_reason"] = "target_error"
+                    inference_path.write_text(
+                        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8",
+                    )
+                ok_attempts = self._ok_attempts_factory()
+                first_attempt = True
+
+                async def fake(*args: object, **kwargs: object) -> tuple[list[dict[str, object]], list[str], int]:
+                    nonlocal first_attempt
+                    if first_attempt:
+                        first_attempt = False
+                        if status == "filter_skipped":
+                            raise LLMInputError("synthetic input refusal")
+                        if status == "judge_failed":
+                            return [], [], 1
+                    return await ok_attempts(*args, **kwargs)
+
+                attempts = AsyncMock(side_effect=fake)
+                with patch.dict(os.environ, {"ASSERT_JUDGE_ERROR_FAIL_RATIO": "0"}), \
+                     patch("assert_ai.core.judge._run_judge_attempts", new=attempts):
+                    result = asyncio.run(run_judge(**inputs))
+
+                self.assertEqual(result["count"], 2)
+                self.assertEqual(result["new_count"], 2)
+                self.assertEqual(result["errored_count"], 0)
+                self.assertEqual(result["judge_failures"], int(status != "scoring_skipped"))
+                self.assertEqual(attempts.await_count, 1 if status == "scoring_skipped" else 2)
+                score_rows = [
+                    json.loads(line)
+                    for line in (root / "scores.jsonl").read_text(encoding="utf-8").splitlines()
+                ]
+                by_id = {row["test_case_id"]: row for row in score_rows}
+                self.assertEqual(by_id["case-0"]["judge_status"], status)
+                self.assertEqual(by_id["case-1"]["judge_status"], "ok")
+                self.assertNotIn("dimensions", by_id["case-0"]["verdict"])
 
     def test_run_judge_error_ratio_resume_retries_only_missing_rows(self) -> None:
         with TemporaryDirectory() as tmp_dir:

@@ -34,14 +34,22 @@ out of 10 fail. There is no separate small-run cutoff.
 
 Set this environment variable to a finite number between `0` and `1`, inclusive.
 For example, `ASSERT_JUDGE_ERROR_FAIL_RATIO=0.20` permits up to 20% row-level
-errors; `0` requires every attempted row to succeed. Invalid values fail before
-judge calls or cached-score changes. Authentication errors and all-error runs
-without prior cached scores remain fatal regardless of this setting.
+errors; `0` rejects any counted row error. Invalid values fail before judge calls
+or cached-score changes. This setting does not relax fatal authentication
+handling or the safeguard against all-error runs without prior cached scores.
+
+Only row errors that leave **no score row** contribute to the numerator,
+including provider content-filter rejections (`LLMContentFilterError`). The
+denominator includes all uncached inference rows processed by the stage, including
+intentional skips, not just model calls. Rows recorded as `filter_skipped`,
+`scoring_skipped`, or `judge_failed` retain their existing handling and do not
+consume this error budget. Even a threshold of `0` therefore does not guarantee
+complete scoring: review score statuses and coverage separately.
 
 Successful scores and viewer artifacts are retained when the threshold is
-exceeded. Failed rows are absent from `scores.jsonl` and retried on resume; cached
-successes do not dilute the retry batch's error ratio. A completed judge summary
-reports these missing rows as `errored_count`.
+exceeded. Rows with counted errors are absent from `scores.jsonl` and retried on
+resume; cached successes do not dilute the retry batch's error ratio. A completed
+judge summary reports these missing rows as `errored_count`.
 
 Increasing the threshold permits partial results; it does **not** restore missing
 judgments or establish safety. Review scoring coverage and content-filter

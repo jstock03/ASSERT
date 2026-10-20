@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 import importlib
+import importlib.util
 from importlib.metadata import metadata
 import unittest
 
@@ -89,3 +90,10 @@ class ImportSmokeTest(unittest.TestCase):
         for version in ("1.84.0", "1.106.0", "1.107.0", "2.0.0"):
             with self.subTest(version=version):
                 self.assertNotIn(version, requirement.specifier)
+
+    def test_litellm_responses_mcp_dispatch_imports(self) -> None:
+        if importlib.util.find_spec("mcp") is None:
+            self.skipTest("Optional MCP SDK is not installed.")
+        importlib.import_module("litellm.experimental_mcp_client")
+        responses = importlib.import_module("litellm.responses.main")
+        self.assertTrue(callable(responses.aresponses))

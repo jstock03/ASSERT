@@ -462,7 +462,7 @@ requires-dist = [
     { name = "acs-generator", marker = "extra == 'acs'", specifier = ">=0.3.1b0,<0.4" },
     { name = "agent-control-specification", marker = "extra == 'acs'", specifier = ">=0.3.1b0" },
     { name = "aiohttp", specifier = ">=3.12.0" },
-    { name = "arize-phoenix", marker = "extra == 'phoenix'", specifier = ">=15.0.0,<19.18.0" },
+    { name = "arize-phoenix", marker = "extra == 'phoenix'", specifier = ">=19.17.0,<19.18.0" },
     { name = "arize-phoenix-otel", marker = "extra == 'phoenix'", specifier = ">=0.15.0" },
     { name = "assert-ai", extras = ["analysis", "acs"], marker = "extra == 'dev'" },
     { name = "assert-ai", extras = ["phoenix", "analysis", "embeddings", "azure-auth", "acs"], marker = "extra == 'all'" },

@@ -5,6 +5,8 @@ import importlib
 from importlib.metadata import metadata
 import unittest
 
+from packaging.requirements import Requirement
+
 
 class ImportSmokeTest(unittest.TestCase):
     def test_cli_imports(self) -> None:
@@ -47,3 +49,25 @@ class ImportSmokeTest(unittest.TestCase):
         )
         for extra in expected_dependencies:
             self.assertIn(extra, all_requirement)
+
+    def test_phoenix_extra_requires_compatible_strawberry_generation(self) -> None:
+        requirements = [
+            Requirement(raw)
+            for raw in metadata("assert-ai").get_all("Requires-Dist") or []
+        ]
+        phoenix_requirements = [
+            requirement for requirement in requirements
+            if requirement.name == "arize-phoenix"
+        ]
+        self.assertEqual(len(phoenix_requirements), 1)
+        requirement = phoenix_requirements[0]
+        self.assertIn("19.17.0", requirement.specifier)
+        for version in ("15.0.0", "19.16.0", "19.18.0", "19.19.0"):
+            with self.subTest(version=version):
+                self.assertNotIn(version, requirement.specifier)
+        self.assertFalse(any(requirement.name == "graphql-core" for requirement in requirements))
+        self.assertIsNotNone(requirement.marker)
+        self.assertTrue(requirement.marker.evaluate({"extra": "phoenix"}))
+        for extra in ("", "analysis", "azure-auth", "embeddings", "acs"):
+            with self.subTest(extra=extra):
+                self.assertFalse(requirement.marker.evaluate({"extra": extra}))

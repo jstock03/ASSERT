@@ -71,3 +71,21 @@ class ImportSmokeTest(unittest.TestCase):
         for extra in ("", "analysis", "azure-auth", "embeddings", "acs"):
             with self.subTest(extra=extra):
                 self.assertFalse(requirement.marker.evaluate({"extra": extra}))
+
+    def test_litellm_requirement_excludes_mcp_incompatible_releases(self) -> None:
+        requirements = [
+            Requirement(raw)
+            for raw in metadata("assert-ai").get_all("Requires-Dist") or []
+        ]
+        litellm_requirements = [
+            requirement for requirement in requirements if requirement.name == "litellm"
+        ]
+        self.assertEqual(len(litellm_requirements), 1)
+        requirement = litellm_requirements[0]
+        self.assertIsNone(requirement.marker)
+        for version in ("1.84.1", "1.100.0", "1.105.1"):
+            with self.subTest(version=version):
+                self.assertIn(version, requirement.specifier)
+        for version in ("1.84.0", "1.106.0", "1.107.0", "2.0.0"):
+            with self.subTest(version=version):
+                self.assertNotIn(version, requirement.specifier)
